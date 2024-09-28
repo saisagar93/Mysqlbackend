@@ -10,10 +10,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000; // Use PORT from .env or default to 5000
 
-app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000', // React frontend URL
-    credentials: true,
-}));
+app.use(cors());
 app.use(bodyParser.json());
 
 app.use(session({
