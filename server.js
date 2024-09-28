@@ -208,6 +208,11 @@ app.post('/logout', (req, res) => {
     });
 });
 
+app.post('/health-check', (req, res) => {
+   return res.json({ message: 'system is up and running.' });
+
+});
+
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
