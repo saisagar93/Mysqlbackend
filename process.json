@@ -1,0 +1,9 @@
+{
+	"apps": [
+		{
+			"name": "jmcc-dashboard-server",
+			"script": "npm",
+			"args" : "run start"
+		}
+	]
+}
