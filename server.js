@@ -62,7 +62,7 @@ const sendEmail = (message) => {
 // Login route
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
-    const query = 'SELECT * FROM sec_login WHERE username = ? AND password = ?';
+    const query = 'SELECT * FROM SEC_LOGIN WHERE username = ? AND password = ?';
     
     db.execute(query, [username, password], (err, results) => {
         if (err) return res.status(500).send('Error on the server.');
@@ -87,7 +87,7 @@ app.post('/addRecord', (req, res) => {
         return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const query = `INSERT INTO dashboard (tracker, sjm, journey_Plane_No, journey_Plane_Date, scheduled_Vehicle, carrier, jp_Status, next_Arrival_Date, next_Point, ivms_Check_Date, ivms_Point, destination, offload_Point, driver_Name, remarks, accommodation, jm, item_Type) 
+    const query = `INSERT INTO JMCC_LIST (tracker, sjm, journey_Plane_No, journey_Plane_Date, scheduled_Vehicle, carrier, jp_Status, next_Arrival_Date, next_Point, ivms_Check_Date, ivms_Point, destination, offload_Point, driver_Name, remarks, accommodation, jm, item_Type) 
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
    
     db.execute(query, [
@@ -108,7 +108,7 @@ app.get('/dashboard', (req, res) => {
         return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    db.query('SELECT * FROM dashboard', (err, results) => {
+    db.query('SELECT * FROM JMCC_LIST', (err, results) => {
         if (err) return res.status(500).json({ message: 'Error fetching dashboard data.' });
         res.json(results);
     });
@@ -123,7 +123,7 @@ app.put('/modifyRecord/:journeyPlaneNo', (req, res) => {
         return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const query = `UPDATE dashboard SET 
+    const query = `UPDATE JMCC_LIST SET 
                    tracker = ?, 
                    sjm = ?, 
                    journey_Plane_No = ?, 
@@ -179,7 +179,7 @@ app.delete('/deleteRecord/:journeyPlaneNo', (req, res) => {
         return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const query = `DELETE FROM dashboard WHERE journey_Plane_No = ?`;
+    const query = `DELETE FROM JMCC_LIST WHERE journey_Plane_No = ?`;
 
     db.execute(query, [journeyPlaneNo], (err, results) => {
         if (err) return res.status(500).json({ message: 'Error deleting record.' });
