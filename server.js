@@ -208,7 +208,7 @@ app.post('/logout', (req, res) => {
     });
 });
 
-app.post('/health-check', (req, res) => {
+app.get('/health-check', (req, res) => {
    return res.json({ message: 'system is up and running.' });
 
 });
