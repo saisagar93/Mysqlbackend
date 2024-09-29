@@ -12,7 +12,6 @@ const PORT = process.env.PORT || 5000; // Use PORT from .env or default to 5000
 
 app.use(cors({
     origin: "http://app.jmccdashboard.com.s3-website.me-central-1.amazonaws.com",
-    credentials: true,
 }));
 app.use(bodyParser.json());
 
@@ -104,6 +103,7 @@ app.post('/addRecord', (req, res) => {
 
 // Dashboard route to fetch records
 app.get('/dashboard', (req, res) => {
+    console.log("req.session ::: ", req.session);
     if (!req.session.user) {
         return res.status(401).json({ message: 'Unauthorized' });
     }
