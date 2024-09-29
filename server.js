@@ -71,7 +71,7 @@ app.post('/login', (req, res) => {
             const userSecret = crypto.randomBytes(64).toString('hex');
             req.session.secret = userSecret;
             req.session.user = { username, secret: userSecret };
-
+            console.log("req.session ::: ", req.session);
             res.json({ message: 'Successfully logged in!', user: req.session.user });
         } else {
             res.status(401).json({ message: 'Invalid credentials.' });
