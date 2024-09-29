@@ -11,17 +11,19 @@ const app = express();
 const PORT = process.env.PORT || 5000; // Use PORT from .env or default to 5000
 
 app.use(cors({
-    origin: "http://app.jmccdashboard.com.s3-website.me-central-1.amazonaws.com",
+    origin: ["http://app.jmccdashboard.com.s3-website.me-central-1.amazonaws.com", "http://localhost:3001", "http://localhost:3000"],
     credentials: true,
 }));
 app.use(bodyParser.json());
 
 app.use(session({
+    secret: 'default_secret',
     resave: false,
-    saveUninitialized: false,
-    secret: 'default_secret', // Default session secret
-    cookie: { maxAge: 1000 * 60 * 60 * 24 } // 1 day session duration
-}));
+    proxy: true,
+    saveUninitialized: true,
+    // Being tested via local IP Address, this would change to secure in prod
+    cookie: { secure: false, httpOnly: false, maxAge: 1000 * 60 * 60 * 24 }
+}))
 
 // MySQL connection setup
 const db = mysql.createConnection({
