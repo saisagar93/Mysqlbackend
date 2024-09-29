@@ -1,4 +1,4 @@
-const express = require('express'); 
+const express = require('express');
 const mysql = require('mysql2');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -10,7 +10,10 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000; // Use PORT from .env or default to 5000
 
-app.use(cors());
+app.use(cors({
+    origin: "http://app.jmccdashboard.com.s3-website.me-central-1.amazonaws.com",
+    credentials: true,
+}));
 app.use(bodyParser.json());
 
 app.use(session({
@@ -60,15 +63,15 @@ const sendEmail = (message) => {
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
     const query = 'SELECT * FROM SEC_LOGIN WHERE username = ? AND password = ?';
-    
+
     db.execute(query, [username, password], (err, results) => {
         if (err) return res.status(500).send('Error on the server.');
-        
+
         if (results.length > 0) {
             const userSecret = crypto.randomBytes(64).toString('hex');
             req.session.secret = userSecret;
             req.session.user = { username, secret: userSecret };
-            
+
             res.json({ message: 'Successfully logged in!', user: req.session.user });
         } else {
             res.status(401).json({ message: 'Invalid credentials.' });
@@ -86,7 +89,7 @@ app.post('/addRecord', (req, res) => {
 
     const query = `INSERT INTO JMCC_LIST (tracker, sjm, journey_Plane_No, journey_Plane_Date, scheduled_Vehicle, carrier, jp_Status, next_Arrival_Date, next_Point, ivms_Check_Date, ivms_Point, destination, offload_Point, driver_Name, remarks, accommodation, jm, item_Type) 
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-   
+
     db.execute(query, [
         recordData.tracker ?? null, recordData.sjm ?? null, recordData.journey_Plane_No ?? null, recordData.journey_Plane_Date ?? null,
         recordData.scheduled_Vehicle ?? null, recordData.carrier ?? null, recordData.jp_Status ?? null,
@@ -206,7 +209,7 @@ app.post('/logout', (req, res) => {
 });
 
 app.get('/health-check', (req, res) => {
-   return res.json({ message: 'system is up and running.' });
+    return res.json({ message: 'system is up and running.' });
 
 });
 
