@@ -20,6 +20,9 @@
     "express": "^4.21.0",
     "express-session": "^1.18.0",
     "mysql2": "^3.11.3",
-    "nodemailer": "^6.9.15"
+    "nodemailer": "^6.9.15",
+   "jsonwebtoken": "^9.0.2",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1"
   }
 }
