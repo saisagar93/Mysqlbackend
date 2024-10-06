@@ -71,6 +71,7 @@ const checkConditionsAndSendEmails = (filteredRecords) => {
     
         criticalCheck: filteredRecords.filter(item => {
             const minutesSinceLastCheck = calculateMinutesSinceLastCheck(item.IVMS_CHECK_DATE);
+            // console.log('difference',minutesSinceLastCheck);
             return (
                 minutesSinceLastCheck > 120 &&
                 !["Done", "DONE", "done"].includes(item.REMARKS) &&
@@ -111,7 +112,7 @@ const checkConditionsAndSendEmails = (filteredRecords) => {
             `JOURNEY PLAN NO:<strong> ${item.JOURNEY_PLANE_NO} </strong>`
         ).join('<br>'); // Use <br> for line breaks in HTML
     
-        const recipients = ["Sagar.b@bayanattechnology.com","prem@bayanattechnology.com","gaurang.pai@bayanattechnology.com"];
+        const recipients = ["Sagar.b@bayanattechnology.com","prem@almadinalogistics.com","naderhakim@almadinalogistics.com"];
         const emailBody = `<span style="font-size: 16px;"><strong>Below Journeys In The Critical Check:</strong></span><br>${emailContent}`;
         
         // Ensure to set content type to text/html in your sendEmail function
@@ -121,7 +122,7 @@ const checkConditionsAndSendEmails = (filteredRecords) => {
     // Check if more than half of live journeys are due for checking
     if (cardCounts.liveJourneys > 0 && cardCounts.dueForChecking >= cardCounts.liveJourneys / 2) {
         const emailBody = '<span style="font-size: 16px;"><strong>More than half of live journeys are due for checking.</strong></span>';
-        sendEmail(["Sagar.b@bayanattechnology.com","prem@bayanattechnology.com","gaurang.pai@bayanattechnology.com"], emailBody, { isHtml: true });
+        sendEmail(["Sagar.b@bayanattechnology.com","prem@almadinalogistics.com","naderhakim@almadinalogistics.com"], emailBody, { isHtml: true });
     }
     
     // Check if live journeys equal stopped trucks
@@ -136,7 +137,7 @@ const checkConditionsAndSendEmails = (filteredRecords) => {
     
         if (hasSameItems) {
             const emailBody = '<span style="font-size: 16px;"><strong>Live journeys and stopped trucks counts are equal, with matching items.</strong></span>';
-            sendEmail(["Sagar.b@bayanattechnology.com","prem@bayanattechnology.com","gaurang.pai@bayanattechnology.com"], emailBody, { isHtml: true });
+            sendEmail(["Sagar.b@bayanattechnology.com","prem@almadinalogistics.com","naderhakim@almadinalogistics.com"], emailBody, { isHtml: true });
         }
     }
     
@@ -151,7 +152,7 @@ const checkConditionsAndSendEmails = (filteredRecords) => {
     for (const [sjmName, count] of Object.entries(sjmCounts)) {
         if (count > 30) {
             const emailBody = `<span style="font-size: 16px;"><strong>SJM ${sjmName} Currently Has More Than 30 Live Journeys.</strong></span>`;
-            sendEmail(["Sagar.b@bayanattechnology.com","prem@bayanattechnology.com","gaurang.pai@bayanattechnology.com"], emailBody, { isHtml: true });
+            sendEmail(["Sagar.b@bayanattechnology.com","prem@almadinalogistics.com","naderhakim@almadinalogistics.com"], emailBody, { isHtml: true });
             }
         }
 
@@ -166,7 +167,7 @@ const checkConditionsAndSendEmails = (filteredRecords) => {
             `JOURNEY PLAN NO: <strong> ${item.JOURNEY_PLANE_NO} </strong>`
         ).join('<br>'); // Use <br> for line breaks in HTML
     
-        const recipients = ["Sagar.b@bayanattechnology.com","prem@bayanattechnology.com","gaurang.pai@bayanattechnology.com"];
+        const recipients = ["Sagar.b@bayanattechnology.com","prem@almadinalogistics.com","naderhakim@almadinalogistics.com"];
         const emailBody = `<span style="font-size: 16px;"><strong>Below Journeys Stopped For The Day:</strong></span><br>${emailContent}`;
         
         sendEmail(recipients, emailBody, { isHtml: true }); // Ensure to send as HTML
@@ -274,6 +275,11 @@ app.put('/modifyRecord/:journeyPlaneNo', passport.authenticate('jwt', { session:
     const journeyPlaneNo = req.params.journeyPlaneNo;
     const updatedData = req.body;
 
+    // Convert dates to UTC
+    updatedData.journey_Plane_Date = formatDateForMySQL(updatedData.journey_Plane_Date);
+    updatedData.next_Arrival_Date = formatDateForMySQL(updatedData.next_Arrival_Date);
+    updatedData.ivms_Check_Date = formatDateForMySQL(updatedData.ivms_Check_Date);
+
     const query = `UPDATE JMCC_LIST SET 
                    tracker = ?, sjm = ?, journey_Plane_No = ?, journey_Plane_Date = ?, 
                    scheduled_Vehicle = ?, carrier = ?, jp_Status = ?, 
@@ -284,15 +290,25 @@ app.put('/modifyRecord/:journeyPlaneNo', passport.authenticate('jwt', { session:
                    WHERE journey_Plane_No = ?`;
 
     db.execute(query, [
-        updatedData.tracker ?? null, updatedData.sjm ?? null, journeyPlaneNo,
-        updatedData.journey_Plane_Date ?? null, updatedData.scheduled_Vehicle ?? null,
-        updatedData.carrier ?? null, updatedData.jp_Status ?? null,
-        updatedData.next_Arrival_Date ?? null, updatedData.next_Point ?? null,
-        updatedData.ivms_Check_Date ?? null, updatedData.ivms_Point ?? null,
-        updatedData.destination ?? null, updatedData.offload_Point ?? null,
-        updatedData.driver_Name ?? null, updatedData.remarks ?? null,
-        updatedData.accommodation ?? null, updatedData.jm ?? null,
-        updatedData.item_Type ?? null, journeyPlaneNo,
+        updatedData.tracker ?? null,
+        updatedData.sjm ?? null,
+        journeyPlaneNo,
+        updatedData.journey_Plane_Date ?? null,
+        updatedData.scheduled_Vehicle ?? null,
+        updatedData.carrier ?? null,
+        updatedData.jp_Status ?? null,
+        updatedData.next_Arrival_Date ?? null,
+        updatedData.next_Point ?? null,
+        updatedData.ivms_Check_Date ?? null,
+        updatedData.ivms_Point ?? null,
+        updatedData.destination ?? null,
+        updatedData.offload_Point ?? null,
+        updatedData.driver_Name ?? null,
+        updatedData.remarks ?? null,
+        updatedData.accommodation ?? null,
+        updatedData.jm ?? null,
+        updatedData.item_Type ?? null,
+        journeyPlaneNo,
     ], async (err, results) => {
         if (err) return res.status(500).json({ message: 'Error updating record.' });
 
@@ -307,6 +323,7 @@ app.put('/modifyRecord/:journeyPlaneNo', passport.authenticate('jwt', { session:
         res.json({ message: 'Record updated successfully!' });
     });
 });
+
 
 // Delete Record
 app.delete('/deleteRecord/:journeyPlaneNo', passport.authenticate('jwt', { session: false }), (req, res) => {
