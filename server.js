@@ -112,7 +112,7 @@ const checkConditionsAndSendEmails = (filteredRecords) => {
             `JOURNEY PLAN NO:<strong> ${item.JOURNEY_PLANE_NO} </strong>`
         ).join('<br>'); // Use <br> for line breaks in HTML
     
-        const recipients = ["Sagar.b@bayanattechnology.com","prem@almadinalogistics.com","naderhakim@almadinalogistics.com"];
+        const recipients = ["JMCC-AMLS@almadinalogistics.com","duqmoperationteam2@almadinalogistics.com","naderhakim@almadinalogistics.com"];
         const emailBody = `<span style="font-size: 16px;"><strong>Below Journeys In The Critical Check:</strong></span><br>${emailContent}`;
         
         // Ensure to set content type to text/html in your sendEmail function
@@ -122,7 +122,7 @@ const checkConditionsAndSendEmails = (filteredRecords) => {
     // Check if more than half of live journeys are due for checking
     if (cardCounts.liveJourneys > 0 && cardCounts.dueForChecking >= cardCounts.liveJourneys / 2) {
         const emailBody = '<span style="font-size: 16px;"><strong>More than half of live journeys are due for checking.</strong></span>';
-        sendEmail(["Sagar.b@bayanattechnology.com","prem@almadinalogistics.com","naderhakim@almadinalogistics.com"], emailBody, { isHtml: true });
+        sendEmail(["JMCC-AMLS@almadinalogistics.com","duqmoperationteam2@almadinalogistics.com","naderhakim@almadinalogistics.com"], emailBody, { isHtml: true });
     }
     
     // Check if live journeys equal stopped trucks
@@ -137,7 +137,7 @@ const checkConditionsAndSendEmails = (filteredRecords) => {
     
         if (hasSameItems) {
             const emailBody = '<span style="font-size: 16px;"><strong>Live journeys and stopped trucks counts are equal, with matching items.</strong></span>';
-            sendEmail(["Sagar.b@bayanattechnology.com","prem@almadinalogistics.com","naderhakim@almadinalogistics.com"], emailBody, { isHtml: true });
+            sendEmail(["JMCC-AMLS@almadinalogistics.com","duqmoperationteam2@almadinalogistics.com","naderhakim@almadinalogistics.com"], emailBody, { isHtml: true });
         }
     }
     
@@ -152,7 +152,7 @@ const checkConditionsAndSendEmails = (filteredRecords) => {
     for (const [sjmName, count] of Object.entries(sjmCounts)) {
         if (count > 30) {
             const emailBody = `<span style="font-size: 16px;"><strong>SJM ${sjmName} Currently Has More Than 30 Live Journeys.</strong></span>`;
-            sendEmail(["Sagar.b@bayanattechnology.com","prem@almadinalogistics.com","naderhakim@almadinalogistics.com"], emailBody, { isHtml: true });
+            sendEmail(["JMCC-AMLS@almadinalogistics.com","duqmoperationteam2@almadinalogistics.com","naderhakim@almadinalogistics.com"], emailBody, { isHtml: true });
             }
         }
 
@@ -167,7 +167,7 @@ const checkConditionsAndSendEmails = (filteredRecords) => {
             `JOURNEY PLAN NO: <strong> ${item.JOURNEY_PLANE_NO} </strong>`
         ).join('<br>'); // Use <br> for line breaks in HTML
     
-        const recipients = ["Sagar.b@bayanattechnology.com","prem@almadinalogistics.com","naderhakim@almadinalogistics.com"];
+        const recipients = ["JMCC-AMLS@almadinalogistics.com","duqmoperationteam2@almadinalogistics.com","naderhakim@almadinalogistics.com"];
         const emailBody = `<span style="font-size: 16px;"><strong>Below Journeys Stopped For The Day:</strong></span><br>${emailContent}`;
         
         sendEmail(recipients, emailBody, { isHtml: true }); // Ensure to send as HTML
@@ -263,7 +263,7 @@ app.post('/addRecord', passport.authenticate('jwt', { session: false }), async (
 
 // Fetch Records
 app.get('/dashboard', passport.authenticate('jwt', { session: false }), (req, res) => {
-    db.query('SELECT * FROM JMCC_LIST', (err, results) => {
+    db.query('SELECT * FROM JMCC_LIST ORDER BY JOURNEY_PLANE_NO DESC;' , (err, results) => {
         if (err) return res.status(500).json({ message: 'Error fetching dashboard data.' });
 
         res.json(results);
