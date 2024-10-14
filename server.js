@@ -26,6 +26,9 @@ const db = mysql.createConnection({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_DATABASE,
     timezone: 'Z',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
 db.connect((err) => {
@@ -57,6 +60,21 @@ const sendEmail = (recipients, message, isHtml = false) => {
 };
 
 
+//Function to normalize string inputs
+const normalizeString = (str) => {
+    return str ? str.trim().toLowerCase() : '';
+};
+
+// Function to normalize the records
+const normalizeRecords = (records) => {
+    return records.map(item => ({
+        ...item,
+        JP_STATUS: normalizeString(item.JP_STATUS),
+        REMARKS: normalizeString(item.REMARKS),
+        IVMS_CHECK_DATE: item.IVMS_CHECK_DATE // Keep original date format for calculations
+    }));
+};
+
 // Function to calculate minutes since last check
 const calculateMinutesSinceLastCheck = (ivmsCheckDate) => {
     if (!ivmsCheckDate) return Infinity;
@@ -67,83 +85,75 @@ const calculateMinutesSinceLastCheck = (ivmsCheckDate) => {
 
 // Function to check conditions and send emails
 const checkConditionsAndSendEmails = (filteredRecords) => {
+    // Normalize the records before processing
+    const normalizedRecords = normalizeRecords(filteredRecords);
+
     const cardCounts = {
-    
-        criticalCheck: filteredRecords.filter(item => {
+        criticalCheck: normalizedRecords.filter(item => {
             const minutesSinceLastCheck = calculateMinutesSinceLastCheck(item.IVMS_CHECK_DATE);
-            // console.log('difference',minutesSinceLastCheck);
             return (
                 minutesSinceLastCheck > 120 &&
-                !["Done", "DONE", "done"].includes(item.REMARKS) &&
-                !["closed", "CLOSED", "Closed"].includes(item.JP_STATUS)
+                item.REMARKS !== "done" &&
+                item.JP_STATUS !== "closed"
             );
         }).length,
-        
-        dueForChecking: filteredRecords.filter(item => {
+
+        dueForChecking: normalizedRecords.filter(item => {
             const minutesSinceLastCheck = calculateMinutesSinceLastCheck(item.IVMS_CHECK_DATE);
             const isValidHours = (minutesSinceLastCheck > 60 && minutesSinceLastCheck < 120) || isNaN(minutesSinceLastCheck);
-            const isValidStatus = 
-                !["closed", "CLOSED", "Closed"].includes(item.JP_STATUS) && 
-                !["Done", "DONE", "done"].includes(item.REMARKS);
-            
-            // Combine the conditions with a logical AND
-            return isValidHours && isValidStatus; // Return the combined result
+            return isValidHours && item.JP_STATUS !== "closed" && item.REMARKS !== "done";
         }).length,
-         
-        liveJourneys: filteredRecords.filter(item =>  ["In Transit", "in transit", "IN TRANSIT"].includes(item.JP_STATUS)).length,
-        stoppedTrucks: filteredRecords.filter(item => ["Done", "DONE", "done"].includes(item.REMARKS) && !["closed", "CLOSED", "Closed"].includes(item.JP_STATUS)).length,
-        Stoppedforday : filteredRecords.filter(item => ["Done", "DONE", "done"].includes(item.REMARKS) && !["closed", "CLOSED", "Closed"].includes(item.JP_STATUS)).length,
+
+        liveJourneys: normalizedRecords.filter(item => ["in transit"].includes(item.JP_STATUS)).length,
+        stoppedTrucks: normalizedRecords.filter(item => item.REMARKS === "done" && item.JP_STATUS !== "closed").length,
+        Stoppedforday: normalizedRecords.filter(item => item.REMARKS === "done" && item.JP_STATUS !== "closed").length,
     };
 
-    const journeyDetails = filteredRecords;
+    const journeyDetails = normalizedRecords;
 
     if (cardCounts.criticalCheck > 0) {
         const criticalJourneyDetails = journeyDetails.filter(item => {
             const minutesSinceLastCheck = calculateMinutesSinceLastCheck(item.IVMS_CHECK_DATE);
             return (
                 minutesSinceLastCheck > 120 &&
-                !["Done", "DONE", "done"].includes(item.REMARKS) &&
-                !["closed", "CLOSED", "Closed"].includes(item.JP_STATUS) && 
-                ["In Transit", "in transit", "IN TRANSIT"].includes(item.JP_STATUS) 
+                item.REMARKS !== "done" &&
+                item.JP_STATUS === "in transit"
             );
         });
-    
+
         const emailContent = criticalJourneyDetails.map(item =>
             `JOURNEY PLAN NO:<strong> ${item.JOURNEY_PLANE_NO} </strong>`
-        ).join('<br>'); // Use <br> for line breaks in HTML
-    
+        ).join('<br>');
+
         const recipients = ["JMCC-AMLS@almadinalogistics.com","duqmoperationteam2@almadinalogistics.com","naderhakim@almadinalogistics.com"];
         const emailBody = `<span style="font-size: 16px;"><strong>Below Journeys In The Critical Check:</strong></span><br>${emailContent}`;
         
-        // Ensure to set content type to text/html in your sendEmail function
-        sendEmail(recipients, emailBody, { isHtml: true }); // Add option to send HTML
+        sendEmail(recipients, emailBody, { isHtml: true });
     }
-    
+
     // Check if more than half of live journeys are due for checking
     if (cardCounts.liveJourneys > 0 && cardCounts.dueForChecking >= cardCounts.liveJourneys / 2) {
         const emailBody = '<span style="font-size: 16px;"><strong>More than half of live journeys are due for checking.</strong></span>';
         sendEmail(["JMCC-AMLS@almadinalogistics.com","duqmoperationteam2@almadinalogistics.com","naderhakim@almadinalogistics.com"], emailBody, { isHtml: true });
     }
-    
+
     // Check if live journeys equal stopped trucks
     if (cardCounts.liveJourneys === cardCounts.stoppedTrucks && cardCounts.liveJourneys > 0) {
         const liveJourneyIds = new Set(journeyDetails.map(item => item.JOURNEY_PLANE_NO));
-        const stoppedTruckIds = new Set(journeyDetails.filter(item =>
-            ["Done", "DONE", "done"].includes(item.REMARKS)
-        ).map(item => item.JOURNEY_PLANE_NO));
-    
+        const stoppedTruckIds = new Set(journeyDetails.filter(item => item.REMARKS === "done").map(item => item.JOURNEY_PLANE_NO));
+
         const hasSameItems = [...liveJourneyIds].every(id => stoppedTruckIds.has(id)) &&
                              [...stoppedTruckIds].every(id => liveJourneyIds.has(id));
-    
+
         if (hasSameItems) {
             const emailBody = '<span style="font-size: 16px;"><strong>Live journeys and stopped trucks counts are equal, with matching items.</strong></span>';
             sendEmail(["JMCC-AMLS@almadinalogistics.com","duqmoperationteam2@almadinalogistics.com","naderhakim@almadinalogistics.com"], emailBody, { isHtml: true });
         }
     }
-    
+
     // Count SJM occurrences
     const sjmCounts = {};  
-    filteredRecords.forEach(item => {
+    normalizedRecords.forEach(item => {
         if (item.SJM) {
             sjmCounts[item.SJM] = (sjmCounts[item.SJM] || 0) + 1;
         }
@@ -153,27 +163,24 @@ const checkConditionsAndSendEmails = (filteredRecords) => {
         if (count > 30) {
             const emailBody = `<span style="font-size: 16px;"><strong>SJM ${sjmName} Currently Has More Than 30 Live Journeys.</strong></span>`;
             sendEmail(["JMCC-AMLS@almadinalogistics.com","duqmoperationteam2@almadinalogistics.com","naderhakim@almadinalogistics.com"], emailBody, { isHtml: true });
-            }
         }
+    }
 
-    // stopped for the day 
+    // Stopped for the day
     if (cardCounts.Stoppedforday > 0) {
         const Stoppedforday = journeyDetails.filter(item => 
-            ["Done", "DONE", "done"].includes(item.REMARKS) && 
-            ["In Transit", "in transit", "IN TRANSIT"].includes(item.JP_STATUS)
+            item.REMARKS === "done" && item.JP_STATUS === "in transit"
         );
-    
+
         const emailContent = Stoppedforday.map(item =>
             `JOURNEY PLAN NO: <strong> ${item.JOURNEY_PLANE_NO} </strong>`
-        ).join('<br>'); // Use <br> for line breaks in HTML
-    
+        ).join('<br>');
+
         const recipients = ["JMCC-AMLS@almadinalogistics.com","duqmoperationteam2@almadinalogistics.com","naderhakim@almadinalogistics.com"];
         const emailBody = `<span style="font-size: 16px;"><strong>Below Journeys Stopped For The Day:</strong></span><br>${emailContent}`;
         
-        sendEmail(recipients, emailBody, { isHtml: true }); // Ensure to send as HTML
+        sendEmail(recipients, emailBody, { isHtml: true });
     }
-    
-    
 };
 
 // Login Route
@@ -217,57 +224,172 @@ app.get('/dashboarddropdown', passport.authenticate('jwt', { session: false }), 
 
 const formatDateForMySQL = (dateString) => {
     const date = new Date(dateString);
+    console.log('DATE',date);
+
     return date.toISOString().slice(0, 19).replace('T', ' ');
 };
 
-// Add Record 
 app.post('/addRecord', passport.authenticate('jwt', { session: false }), async (req, res) => {
     const recordData = req.body;
-    
+
+    // Format dates for MySQL
     recordData.journey_Plane_Date = formatDateForMySQL(recordData.journey_Plane_Date);
     recordData.next_Arrival_Date = formatDateForMySQL(recordData.next_Arrival_Date);
     recordData.ivms_Check_Date = formatDateForMySQL(recordData.ivms_Check_Date);
 
-    const query = `INSERT INTO JMCC_LIST (tracker, sjm, journey_Plane_No, journey_Plane_Date, scheduled_Vehicle, carrier, jp_Status, next_Arrival_Date, next_Point, ivms_Check_Date, ivms_Point, destination, offload_Point, driver_Name, remarks, accommodation, jm, item_Type) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-
-    db.execute(query, [
-        recordData.tracker ?? null,
-        recordData.sjm ?? null,
-        recordData.journey_Plane_No ?? null,
-        recordData.journey_Plane_Date ?? null,
-        recordData.scheduled_Vehicle ?? null,
-        recordData.carrier ?? null,
-        recordData.jp_Status ?? null,
-        recordData.next_Arrival_Date ?? null,
-        recordData.next_Point ?? null,
-        recordData.ivms_Check_Date ?? null,
-        recordData.ivms_Point ?? null,
-        recordData.destination ?? null,
-        recordData.offload_Point ?? null,
-        recordData.driver_Name ?? null,
-        recordData.remarks ?? null,
-        recordData.accommodation ?? null,
-        recordData.jm ?? null,
-        recordData.item_Type ?? null,
-    ], (err, results) => {
+    // Check if journey_Plane_No already exists
+    const checkQuery = `SELECT * FROM JMCC_LIST WHERE journey_Plane_No = ?`;
+    db.execute(checkQuery, [recordData.journey_Plane_No], (err, results) => {
         if (err) {
-            console.error('Database insertion error:', err); // Log the specific error
-            return res.status(500).json({ message: 'Error inserting record.', error: err.message });
+            console.error('Error checking for existing record:', err);
+            return res.status(500).json({ message: 'Error checking for existing record.', error: err.message });
         }
 
-        res.json({ message: 'Record added successfully!' });
+        // If the record exists, send an appropriate message
+        if (results.length > 0) {
+            return res.status(409).json({ message: 'Journey Plane No already exists.' });
+        }
+
+        // Proceed with the insertion if it does not exist
+        const insertQuery = `INSERT INTO JMCC_LIST (tracker, sjm, journey_Plane_No, journey_Plane_Date, scheduled_Vehicle, carrier, jp_Status, next_Arrival_Date, next_Point, ivms_Check_Date, ivms_Point, destination, offload_Point, driver_Name, remarks, accommodation, jm, item_Type) 
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+        db.execute(insertQuery, [
+            recordData.tracker ?? null,
+            recordData.sjm ?? null,
+            recordData.journey_Plane_No ?? null,
+            recordData.journey_Plane_Date ?? null,
+            recordData.scheduled_Vehicle ?? null,
+            recordData.carrier ?? null,
+            recordData.jp_Status ?? null,
+            recordData.next_Arrival_Date ?? null,
+            recordData.next_Point ?? null,
+            recordData.ivms_Check_Date ?? null,
+            recordData.ivms_Point ?? null,
+            recordData.destination ?? null,
+            recordData.offload_Point ?? null,
+            recordData.driver_Name ?? null,
+            recordData.remarks ?? null,
+            recordData.accommodation ?? null,
+            recordData.jm ?? null,
+            recordData.item_Type ?? null,
+        ], (err, results) => {
+            if (err) {
+                console.error('Database insertion error:', err);
+                return res.status(500).json({ message: 'Error inserting record.', error: err.message });
+            }
+
+            res.json({ message: 'Record added successfully!' });
+        });
     });
 });
 
 
 // Fetch Records
 app.get('/dashboard', passport.authenticate('jwt', { session: false }), (req, res) => {
-    db.query('SELECT * FROM JMCC_LIST ORDER BY JOURNEY_PLANE_NO DESC;' , (err, results) => {
+    db.query('SELECT * FROM JMCC_LIST', (err, results) => {
         if (err) return res.status(500).json({ message: 'Error fetching dashboard data.' });
 
         res.json(results);
     });
+});
+
+
+//Modify for React Grid 
+app.patch('/modifyRecordsBatch', passport.authenticate('jwt', { session: false }), (req, res) => {
+    const updatedDataArray = req.body; // Expecting an array of updated records
+
+    console.log('Received updated records:', updatedDataArray);
+
+    // Validate input
+    if (!Array.isArray(updatedDataArray) || updatedDataArray.length === 0) {
+        return res.status(400).json({ message: 'Please Make Changes Before Saving.' });
+    }
+
+    // Prepare an array to hold update promises
+    const updatePromises = updatedDataArray.map(updatedData => {
+        // Convert dates to UTC (if provided)
+        if (updatedData.JOURNEY_PLANE_DATE) {
+            updatedData.JOURNEY_PLANE_DATE = formatDateForMySQL(updatedData.JOURNEY_PLANE_DATE);
+        }
+        if (updatedData.NEXT_ARRIVAL_DATE) {
+            updatedData.NEXT_ARRIVAL_DATE = formatDateForMySQL(updatedData.NEXT_ARRIVAL_DATE);
+        }
+        if (updatedData.IVMS_CHECK_DATE) {
+            updatedData.IVMS_CHECK_DATE = formatDateForMySQL(updatedData.IVMS_CHECK_DATE);
+        }
+     
+        const query = `UPDATE JMCC_LIST SET 
+            tracker = ?, sjm = ?, journey_Plane_No = ?, journey_Plane_Date = ?, 
+            scheduled_Vehicle = ?, carrier = ?, jp_Status = ?, 
+            next_Arrival_Date = ?, next_Point = ?, ivms_Check_Date = ?, 
+            ivms_Point = ?, destination = ?, offload_Point = ?, 
+            driver_Name = ?, remarks = ?, accommodation = ?, 
+            jm = ?, item_Type = ? 
+            WHERE journey_Plane_No = ?`;
+
+        // Return a promise for each update
+        return new Promise((resolve, reject) => {
+            db.execute(query, [
+                        updatedData.TRACKER ?? null,
+                        updatedData.SJM ?? null,
+                        updatedData.JOURNEY_PLANE_NO, // Ensure this is populated
+                        updatedData.JOURNEY_PLANE_DATE ?? null,
+                        updatedData.SCHEDULED_VEHICLE ?? null,
+                        updatedData.CARRIER ?? null,
+                        updatedData.JP_STATUS ?? null,
+                        updatedData.NEXT_ARRIVAL_DATE ?? null,
+                        updatedData.NEXT_POINT ?? null,
+                        updatedData.IVMS_CHECK_DATE ?? null,
+                        updatedData.IVMS_POINT ?? null,
+                        updatedData.DESTINATION ?? null,
+                        updatedData.OFFLOAD_POINT ?? null,
+                        updatedData.DRIVER_NAME ?? null,
+                        updatedData.REMARKS ?? null,
+                        updatedData.ACCOMMODATION ?? null,
+                        updatedData.JM ?? null,
+                        updatedData.ITEM_TYPE ?? null,
+                        updatedData.JOURNEY_PLANE_NO
+            ].map(param => param === undefined ? null : param), (err, results) => {
+                if (err) {
+                    console.error('Error updating record for:', updatedData.JOURNEY_PLANE_NO, err);
+                    reject(err); // Reject promise on error
+                } else {
+                    if (results.affectedRows === 0) {
+                        console.log('No records were updated for:', updatedData.JOURNEY_PLANE_NO);
+                    } else {
+                        console.log('Record updated for:', updatedData.JOURNEY_PLANE_NO);
+                    }
+                    resolve(results); // Resolve promise on success
+                }
+            });
+        });
+    });
+
+    // Execute all update promises
+    Promise.all(updatePromises)
+        .then(() => {
+            // Fetch updated records after all updates are successful
+            console.log("HELLO");
+            
+            db.query("SELECT * FROM JMCC_LIST WHERE LOWER(JP_STATUS) = 'IN TRANSIT'", (err, allRecords) => {
+                if (err) {
+                    console.error('Error fetching records:', err);
+                    return res.status(500).json({ message: 'Error fetching records.' });   
+                }
+                
+                checkConditionsAndSendEmails(allRecords);
+                
+                res.json({ message: 'Records updated successfully!' });
+            });
+            
+        }
+       
+    )
+        .catch(err => {
+            console.error('Error during batch update:', err);
+            res.status(500).json({ message: 'Error updating records in batch.' });
+        });
 });
 
 // Modify Records
@@ -313,7 +435,7 @@ app.put('/modifyRecord/:journeyPlaneNo', passport.authenticate('jwt', { session:
         if (err) return res.status(500).json({ message: 'Error updating record.' });
 
         // Fetch updated records and check conditions
-        db.query("SELECT * FROM JMCC_LIST WHERE JP_STATUS = 'IN TRANSIT'", async (err, allRecords) => { 
+        db.query("SELECT * FROM JMCC_LIST WHERE LOWER(JP_STATUS) = 'IN TRANSIT'", async (err, allRecords) => { 
             if (err) {
                 return res.status(500).json({ message: 'Error fetching records.' });
             }
@@ -345,4 +467,4 @@ app.get('/health-check', (req, res) => {
 // Start the server
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
-});
+});  
